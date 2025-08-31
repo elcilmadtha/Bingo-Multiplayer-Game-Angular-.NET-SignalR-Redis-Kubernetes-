@@ -1,0 +1,72 @@
+stages:
+  - build
+  - deploy
+
+image: google/cloud-sdk:latest
+
+variables:
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  GOOGLE_APPLICATION_CREDENTIALS: "$CI_PROJECT_DIR/gcloud-key.json"
+  DOCKER_IMAGE: asia-south1-docker.pkg.dev/$GOOGLE_PROJECT_ID/$REPO_NAME/$IMAGE_NAME
+
+cache:
+  paths:
+    - node_modules/
+
+Build:
+  stage: build
+  image: node:20
+  script:
+    - rm -f .npmrc     
+    - npm config set registry https://registry.npmjs.org/
+    - npm config list
+    - npm config get registry
+    - echo "registry=https://registry.npmjs.org/" > .npmrc
+    - npm install --registry=https://registry.npmjs.org/
+    - npm ci --verbose --no-audit --progress=false
+    - npm run build -- --configuration=production
+  artifacts:
+    paths:
+      - dist/
+  
+
+Dockerize:
+  stage: deploy
+  needs: ["Build"]
+  image:
+      name: docker:latest
+      entrypoint: [""]
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - docker --version
+    - docker info || echo "Docker is NOT working!"
+    - echo "$GCLOUD_SERVICE_KEY_BASE64" | base64 -d > gcloud-key.json
+    - cat gcloud-key.json | docker login -u _json_key --password-stdin https://asia-south1-docker.pkg.dev
+  script:
+    - docker build -t $DOCKER_IMAGE:$IMAGE_TAG -f k8s/Dockerfile .
+    - docker push $DOCKER_IMAGE:$IMAGE_TAG
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  
+Deploy:
+  stage: deploy
+  needs: ["Dockerize"]
+  image:
+        name: google/cloud-sdk:latest
+        entrypoint: [""]
+  before_script:
+      - echo $GCLOUD_SERVICE_KEY_BASE64 | base64 -d > "$GOOGLE_APPLICATION_CREDENTIALS"
+      - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+      - gcloud config set project $GOOGLE_PROJECT_ID
+      - gcloud config set compute/zone $CLUSTER_ZONE
+      - gcloud container clusters get-credentials $CLUSTER_NAME
+  script:
+      - kubectl apply -f k8s/bingo-ui-service.yml
+      - kubectl apply -f k8s/bingo-ui-deployment.yml
+      - kubectl set image deployment/bingo-ui-deployment bingo-ui-deployment-container=$DOCKER_IMAGE:$IMAGE_TAG
+  rules:
+      - if: '$CI_COMMIT_BRANCH == "main"'

@@ -1,0 +1,68 @@
+
+<div class="bingo-container">
+
+  <div>
+    <div class="your-name font-family" *ngIf="currentUser">
+      <p>You: {{currentUser}}</p>
+    </div>
+    <div class="sound-toggle" (click)="toggleSound()">
+      <i class="fa" [ngClass]="{ 'fa-volume-up': isSoundOn, 'fa-volume-off': !isSoundOn }"></i>
+    </div>
+  </div>
+
+  <div class="bingo-tracker">
+    <div *ngFor="let item of bingoLetters"
+         [ngClass]="{ 'crossed': item.crossed }"
+         class="bingo-box font-family">
+      {{ item.letter }}
+    </div>
+  </div>
+
+  <div *ngIf="gameState === GameState.Idle">
+    <div class="input-group font-family">
+      <label for="username">Enter your username:</label>
+      <input type="text" id="username" [(ngModel)]="username" placeholder="Username">
+    </div>
+    <button class="join-button font-family" (click)="joinGame()">JOIN</button>
+  </div>
+
+  <div *ngIf="gameState === GameState.Loading" class="waiting-opponent font-family">
+    Waiting for opponent
+    <span class="dot" *ngFor="let d of [1,2,3]"></span>
+  </div>
+
+  <div *ngIf="gameState === GameState.Playing">
+    <div class="board">
+      <div class="row" *ngFor="let row of grid">
+        <div class="cell"
+             *ngFor="let cell of row"
+             [ngClass]="[getCellClass(cell), !enabledToPlay ? 'disabled' : '']"
+             [class.highlight]="cell.highlight"
+             (click)="onCellClick(cell)">
+          {{ cell.value }}
+        </div>
+      </div>
+    </div>
+
+    <div class="waiting-opponent" *ngIf="!gameOver && showMessage">
+      <span class="dot font-family" *ngFor="let d of [1,2,3]"></span>
+      {{showMessage}}
+    </div>
+    <div *ngIf="opponentName" class="font-family">Your Opponent: <label class="test-color">{{opponentName | titleCase}}</label></div>
+
+    <button *ngIf="gameOver" class="ok-btn" [ngClass]="{ 'win-btn': isWinner, 'lose-btn': !isWinner }"  (click)="restartGame()">
+      Restart
+    </button>
+
+    <div *ngIf="gameOver && gameOverMessage" class="popup-backdrop">
+      <div class="popup">
+        <h2>Game Over</h2>
+        <p [ngClass]="gameResultClass">{{ gameResultText }}</p>
+        <button class="ok-btn" [ngClass]="{ 'win-btn': isWinner, 'lose-btn': !isWinner }" (click)="gameOverMessage = ''">
+          Ok
+        </button>
+      </div>
+    </div>
+
+  </div>
+
