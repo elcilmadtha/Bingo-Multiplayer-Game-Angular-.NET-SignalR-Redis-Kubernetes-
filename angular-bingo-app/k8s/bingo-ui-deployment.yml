@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+
+kind: Deployment
+
+metadata:
+  name: bingo-ui-deployment
+  labels:
+    app: bingo-ui-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bingo-ui-deployment
+  template:
+    metadata:
+      labels:
+        app: bingo-ui-deployment
+    spec:
+      containers:
+      - name: bingo-ui-deployment-container
+        image: asia-south1-docker.pkg.dev/ascendant-hub-197910/angular-bingo-app/angular-bingo-app:latest
+        ports:
+        - containerPort: 80
+

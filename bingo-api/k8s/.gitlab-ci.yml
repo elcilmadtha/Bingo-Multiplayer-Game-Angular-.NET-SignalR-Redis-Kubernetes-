@@ -1,0 +1,103 @@
+stages:
+    # - build
+    - deploy
+    
+
+variables:
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  GOOGLE_APPLICATION_CREDENTIALS: "$CI_PROJECT_DIR/gcloud-key.json"
+  CLUSTER_NAME: chat-cluster
+  CLUSTER_ZONE: asia-south1-b
+  TF_VAR_gitlab_token: $CI_JOB_TOKEN
+  ASPNETCORE_ENVIRONMENT: Production
+
+# # Build .NET app
+# Build:
+#   image: mcr.microsoft.com/dotnet/sdk:8.0
+#   stage: build
+#   script:
+#     - dotnet restore
+#     - dotnet build --no-restore --configuration Release
+
+
+# build docker image
+Dockerize:
+  image: docker:latest
+  stage: deploy
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - docker --version
+    - docker info || echo "Docker is NOT working!"
+    - echo "$GCLOUD_SERVICE_KEY_BASE64" | base64 -d > gcloud-key.json
+    - cat gcloud-key.json | docker login -u _json_key --password-stdin https://asia-south1-docker.pkg.dev
+  script:
+    - docker build -f k8s/Dockerfile -t asia-south1-docker.pkg.dev/$GOOGLE_PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$CI_COMMIT_SHA .
+    - docker tag asia-south1-docker.pkg.dev/$GOOGLE_PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$CI_COMMIT_SHA asia-south1-docker.pkg.dev/$GOOGLE_PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest
+    - docker push asia-south1-docker.pkg.dev/$GOOGLE_PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push asia-south1-docker.pkg.dev/$GOOGLE_PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest
+#   # rules:
+#   #   - if: '$CI_COMMIT_BRANCH == "main"' 
+
+
+Deploy:
+  image: google/cloud-sdk:latest
+  needs: ["Dockerize"]
+  stage: deploy
+  before_script:
+    - echo "$GCLOUD_SERVICE_KEY_BASE64" | base64 -d > gcloud-key.json
+    - gcloud auth activate-service-account --key-file=gcloud-key.json
+    - gcloud config set project ascendant-hub-197910
+    - gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE
+  script:
+    - sed -i "s|BINGO_API_IMAGE_TAG|$CI_COMMIT_SHA|g" k8s/deployment.yaml
+    - kubectl apply -f k8s/service.yml
+    - kubectl apply -f k8s/deployment.yaml
+#   # rules:
+#   #   - if: '$CI_COMMIT_BRANCH == "main"'
+
+# Infra-v1:
+#   stage: deploy
+#   image: google/cloud-sdk:latest
+#   needs: ["Dockerize", "Deploy"]
+#   before_script:
+#     - echo "$GCLOUD_SERVICE_KEY_BASE64" | base64 -d > gcloud-key.json
+#     - gcloud auth activate-service-account --key-file=gcloud-key.json
+#     - gcloud config set project ascendant-hub-197910
+#     - gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE
+#   script:
+#     - kubectl apply -f k8s/ingress/certificate.yml
+
+
+# Infra-v2:
+#   stage: deploy
+#   image: google/cloud-sdk:latest
+#   needs: ["Dockerize", "Deploy", "Infra-v1"]
+#   before_script:
+#     - echo "$GCLOUD_SERVICE_KEY_BASE64" | base64 -d > gcloud-key.json
+#     - gcloud auth activate-service-account --key-file=gcloud-key.json
+#     - gcloud config set project ascendant-hub-197910
+#     - gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE
+#   script:
+#     - kubectl apply -f k8s/ingress/backendconfig.yml
+#     - kubectl apply -f k8s/ingress/cluster-issuer.yml
+#     - kubectl apply -f k8s/ingress/ingress.yml
+
+
+
+# DeployRedis:
+#   image: google/cloud-sdk:latest
+#   stage: deploy
+#   before_script:
+#     - echo "$GCLOUD_SERVICE_KEY_BASE64" | base64 -d > gcloud-key.json
+#     - gcloud auth activate-service-account --key-file=gcloud-key.json
+#     - gcloud config set project ascendant-hub-197910
+#     - gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE
+#   script:
+#     - kubectl apply -f k8s/service.yml
+#     - kubectl apply -f k8s/deployment.yml
+#   # rules:
+#   #   - if: '$CI_COMMIT_BRANCH == "main"'
+    

@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bingo-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce" 
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    ingress.gcp.kubernetes.io/enable-websocket: "true"
+    ingress.gcp.kubernetes.io/backend-protocol: "HTTP"
+    ingress.gcp.kubernetes.io/session-affinity: "CLIENT_IP"
+    ingress.gcp.kubernetes.io/session-affinity-cookie-ttl: "3600"
+    cloud.google.com/backend-config: '{"default": "websocket-config-for-ingress"}'
+spec:
+  rules:
+  - host: bingo.taaindia.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bingo-ui-service
+            port:
+              number: 80
+  - host: bingoapi.taaindia.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bingo-api-service
+            port:
+              number: 80
+  tls:
+    - hosts:
+        - bingo.taaindia.in
+        - bingoapi.taaindia.in
+      secretName: bingo-tls
